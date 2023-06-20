@@ -2,7 +2,7 @@
 seeds = false
 skip-lint = false
 [programs.localnet]
-anchor_compressed_notes = "2mSBovTknkxWt2q3rtJyR9XjVgtxD3YgjqkyK1vZqsoA"
+anchor_compressed_notes = "TCxHVHUGREfiguKx9SuJsH9Dw6WQpFsRrEfHoXnNopT"
 
 [registry]
 url = "https://api.apr.dev"

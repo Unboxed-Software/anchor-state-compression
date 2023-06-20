@@ -6,6 +6,8 @@ import {
   Transaction,
   PublicKey,
   sendAndConfirmTransaction,
+  Connection,
+  clusterApiUrl,
 } from "@solana/web3.js"
 import {
   ValidDepthSizePair,
@@ -13,12 +15,16 @@ import {
   SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
   SPL_NOOP_PROGRAM_ID,
 } from "@solana/spl-account-compression"
+import { getApplicationData } from "../utils/utils"
+import { assert } from "chai"
 
 describe("anchor-compressed-notes", () => {
   const provider = anchor.AnchorProvider.env()
   anchor.setProvider(provider)
+  const connection = new Connection("http://localhost:8899", "confirmed")
+  // const connection = new Connection(clusterApiUrl("devnet"), "confirmed")
+
   const wallet = provider.wallet as anchor.Wallet
-  const connection = provider.connection
   const program = anchor.workspace
     .AnchorCompressedNotes as Program<AnchorCompressedNotes>
 
@@ -58,14 +64,10 @@ describe("anchor-compressed-notes", () => {
 
     const tx = new Transaction().add(allocTreeIx, ix)
 
-    const txSignature = await sendAndConfirmTransaction(
-      connection,
-      tx,
-      [wallet.payer, merkleTree],
-      {
-        commitment: "confirmed",
-      }
-    )
+    const txSignature = await sendAndConfirmTransaction(connection, tx, [
+      wallet.payer,
+      merkleTree,
+    ])
 
     console.log("txSignature", txSignature)
   })
@@ -83,6 +85,13 @@ describe("anchor-compressed-notes", () => {
       .rpc()
 
     console.log("txSignature", txSignature)
+
+    const applicationData = await getApplicationData(
+      connection,
+      txSignature,
+      program.programId
+    )
+    assert("hello world" === applicationData)
   })
 
   it("Append Another Leaf", async () => {
@@ -98,5 +107,12 @@ describe("anchor-compressed-notes", () => {
       .rpc()
 
     console.log("txSignature", txSignature)
+
+    const applicationData = await getApplicationData(
+      connection,
+      txSignature,
+      program.programId
+    )
+    assert("another leaf" === applicationData)
   })
 })

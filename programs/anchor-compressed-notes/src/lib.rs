@@ -7,7 +7,7 @@ use spl_account_compression::{
     program::SplAccountCompression,
     wrap_application_data_v1, Noop,
 };
-declare_id!("2mSBovTknkxWt2q3rtJyR9XjVgtxD3YgjqkyK1vZqsoA");
+declare_id!("TCxHVHUGREfiguKx9SuJsH9Dw6WQpFsRrEfHoXnNopT");
 
 #[program]
 pub mod anchor_compressed_notes {
@@ -56,7 +56,7 @@ pub mod anchor_compressed_notes {
         );
         append(cpi_ctx, leaf_node)?;
 
-        wrap_application_data_v1(leaf_node.try_to_vec()?, &ctx.accounts.log_wrapper)?;
+        wrap_application_data_v1(message.try_to_vec()?, &ctx.accounts.log_wrapper)?;
         Ok(())
     }
 }
