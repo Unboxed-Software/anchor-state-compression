@@ -17,6 +17,7 @@ import {
 } from "@solana/spl-account-compression"
 import { getNote } from "../utils/utils"
 import { assert } from "chai"
+import { keccak256 } from "js-sha3"
 
 describe("anchor-compressed-notes", () => {
   const provider = anchor.AnchorProvider.env()
@@ -85,8 +86,11 @@ describe("anchor-compressed-notes", () => {
       .rpc()
 
     const note = await getNote(connection, txSignature, program.programId)
-    console.log(note)
+    const hash = keccak256(message)
+    assert(hash === Buffer.from(note.leaf_node).toString("hex"))
     assert(message === note.message)
+
+    console.log(note)
   })
 
   it("Append Another Leaf", async () => {
@@ -103,7 +107,10 @@ describe("anchor-compressed-notes", () => {
       .rpc()
 
     const note = await getNote(connection, txSignature, program.programId)
-    console.log(note)
+    const hash = keccak256(message)
+    assert(hash === Buffer.from(note.leaf_node).toString("hex"))
     assert(message === note.message)
+
+    console.log(note)
   })
 })

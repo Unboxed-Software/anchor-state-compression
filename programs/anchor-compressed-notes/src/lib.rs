@@ -87,7 +87,7 @@ pub struct AppendNote<'info> {
         bump,
     )]
     pub tree_authority: SystemAccount<'info>,
-    /// CHECK: This account must be all zeros
+    /// CHECK: This account is validated in the SplAccountCompression program
     #[account(mut)]
     pub merkle_tree: UncheckedAccount<'info>,
     pub log_wrapper: Program<'info, Noop>,

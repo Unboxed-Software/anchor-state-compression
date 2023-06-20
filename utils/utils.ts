@@ -6,6 +6,30 @@ import { Connection, PublicKey } from "@solana/web3.js"
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes"
 import { deserialize } from "borsh"
 
+class Note {
+  leaf_node: Uint8Array
+  message: string
+
+  constructor(properties: { leaf_node: Uint8Array; message: string }) {
+    this.leaf_node = properties.leaf_node
+    this.message = properties.message
+  }
+}
+
+// A map that describes the Note structure for Borsh deserialization
+const NoteBorshSchema = new Map([
+  [
+    Note,
+    {
+      kind: "struct",
+      fields: [
+        ["leaf_node", [32]], // Array of 32 `u8`
+        ["message", "string"],
+      ],
+    },
+  ],
+])
+
 export async function getNote(
   connection: Connection,
   txSignature: string,
@@ -42,31 +66,26 @@ export async function getNote(
   }
 
   // Get the inner instructions related to the program instruction
-  const relevantInnerInstructions =
-    txInfo!.meta?.innerInstructions?.[relevantIndex].instructions
+  const innerIx = txInfo!.meta?.innerInstructions?.[relevantIndex].instructions
 
   // Filter out the instructions that aren't no-ops
-  const relevantInnerIxs = relevantInnerInstructions.filter((instruction) =>
+  const noopInnerIx = innerIx.filter((instruction) =>
     isProgramId(instruction, SPL_NOOP_PROGRAM_ID.toBase58())
   )
 
-  let note: NoteSchema
-  for (let i = relevantInnerIxs.length - 1; i >= 0; i--) {
+  let note: Note
+  for (let i = noopInnerIx.length - 1; i >= 0; i--) {
     try {
       // Try to decode and deserialize the instruction data
       const applicationDataEvent = deserializeApplicationDataEvent(
-        Buffer.from(bs58.decode(relevantInnerIxs[i]?.data!))
+        Buffer.from(bs58.decode(noopInnerIx[i]?.data!))
       )
 
       // Get the application data
       const applicationData = applicationDataEvent.fields[0].applicationData
 
-      // Deserialize the application data into NoteSchema
-      note = deserialize(
-        NoteSchemaSchema,
-        NoteSchema,
-        Buffer.from(applicationData)
-      )
+      // Deserialize the application data into Note instance
+      note = deserialize(NoteBorshSchema, Note, Buffer.from(applicationData))
 
       if (note !== undefined) {
         break
@@ -76,26 +95,3 @@ export async function getNote(
 
   return note
 }
-
-class NoteSchema {
-  leaf_node: Uint8Array
-  message: string
-
-  constructor(properties: { leaf_node: Uint8Array; message: string }) {
-    this.leaf_node = properties.leaf_node
-    this.message = properties.message
-  }
-}
-
-const NoteSchemaSchema = new Map([
-  [
-    NoteSchema,
-    {
-      kind: "struct",
-      fields: [
-        ["leaf_node", [32]], // Array of 32 `u8`
-        ["message", "string"],
-      ],
-    },
-  ],
-])

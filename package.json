@@ -6,7 +6,9 @@
   "dependencies": {
     "@coral-xyz/anchor": "^0.28.0",
     "@solana/spl-account-compression": "^0.1.8",
-    "borsh": "^0.7.0"
+    "borsh": "^0.7.0",
+    "js-sha3": "^0.8.0",
+    "keccak": "^3.0.3"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",
