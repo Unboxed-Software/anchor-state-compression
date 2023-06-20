@@ -5,7 +5,8 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.28.0",
-    "@solana/spl-account-compression": "^0.1.8"
+    "@solana/spl-account-compression": "^0.1.8",
+    "borsh": "^0.7.0"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",

@@ -38,6 +38,7 @@ pub mod anchor_compressed_notes {
     }
     pub fn append_note(ctx: Context<AppendNote>, message: String) -> Result<()> {
         let leaf_node = keccak::hashv(&[message.as_bytes()]).to_bytes();
+        let note = NoteSchema::new(leaf_node.clone(), message);
 
         let merkle_tree = ctx.accounts.merkle_tree.key();
         let signer_seeds: &[&[&[u8]]] = &[&[
@@ -56,7 +57,7 @@ pub mod anchor_compressed_notes {
         );
         append(cpi_ctx, leaf_node)?;
 
-        wrap_application_data_v1(message.try_to_vec()?, &ctx.accounts.log_wrapper)?;
+        wrap_application_data_v1(note.try_to_vec()?, &ctx.accounts.log_wrapper)?;
         Ok(())
     }
 }
@@ -91,4 +92,16 @@ pub struct AppendNote<'info> {
     pub merkle_tree: UncheckedAccount<'info>,
     pub log_wrapper: Program<'info, Noop>,
     pub compression_program: Program<'info, SplAccountCompression>,
+}
+
+#[derive(AnchorSerialize)]
+pub struct NoteSchema {
+    leaf_node: [u8; 32],
+    message: String,
+}
+
+impl NoteSchema {
+    pub fn new(leaf_node: [u8; 32], message: String) -> Self {
+        Self { leaf_node, message }
+    }
 }

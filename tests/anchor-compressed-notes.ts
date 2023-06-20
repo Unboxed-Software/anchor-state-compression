@@ -15,7 +15,7 @@ import {
   SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
   SPL_NOOP_PROGRAM_ID,
 } from "@solana/spl-account-compression"
-import { getApplicationData } from "../utils/utils"
+import { getNote } from "../utils/utils"
 import { assert } from "chai"
 
 describe("anchor-compressed-notes", () => {
@@ -51,7 +51,6 @@ describe("anchor-compressed-notes", () => {
       canopyDepth
     )
 
-    // Add your test here.
     const ix = await program.methods
       .createNoteTree(maxDepthSizePair.maxDepth, maxDepthSizePair.maxBufferSize)
       .accounts({
@@ -73,9 +72,10 @@ describe("anchor-compressed-notes", () => {
   })
 
   it("Append Leaf", async () => {
-    // Add your test here.
+    const message = "hello world"
+
     const txSignature = await program.methods
-      .appendNote("hello world")
+      .appendNote(message)
       .accounts({
         merkleTree: merkleTree.publicKey,
         treeAuthority: treeAuthority,
@@ -84,20 +84,16 @@ describe("anchor-compressed-notes", () => {
       })
       .rpc()
 
-    console.log("txSignature", txSignature)
-
-    const applicationData = await getApplicationData(
-      connection,
-      txSignature,
-      program.programId
-    )
-    assert("hello world" === applicationData)
+    const note = await getNote(connection, txSignature, program.programId)
+    console.log(note)
+    assert(message === note.message)
   })
 
   it("Append Another Leaf", async () => {
-    // Add your test here.
+    const message = "another leaf"
+
     const txSignature = await program.methods
-      .appendNote("another leaf")
+      .appendNote(message)
       .accounts({
         merkleTree: merkleTree.publicKey,
         treeAuthority: treeAuthority,
@@ -106,13 +102,8 @@ describe("anchor-compressed-notes", () => {
       })
       .rpc()
 
-    console.log("txSignature", txSignature)
-
-    const applicationData = await getApplicationData(
-      connection,
-      txSignature,
-      program.programId
-    )
-    assert("another leaf" === applicationData)
+    const note = await getNote(connection, txSignature, program.programId)
+    console.log(note)
+    assert(message === note.message)
   })
 })

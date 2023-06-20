@@ -4,8 +4,9 @@ import {
 } from "@solana/spl-account-compression"
 import { Connection, PublicKey } from "@solana/web3.js"
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes"
+import { deserialize } from "borsh"
 
-export async function getApplicationData(
+export async function getNote(
   connection: Connection,
   txSignature: string,
   programId: PublicKey
@@ -49,29 +50,52 @@ export async function getApplicationData(
     isProgramId(instruction, SPL_NOOP_PROGRAM_ID.toBase58())
   )
 
-  let data: string
+  let note: NoteSchema
   for (let i = relevantInnerIxs.length - 1; i >= 0; i--) {
     try {
       // Try to decode and deserialize the instruction data
-      const changeLogEvent = deserializeApplicationDataEvent(
+      const applicationDataEvent = deserializeApplicationDataEvent(
         Buffer.from(bs58.decode(relevantInnerIxs[i]?.data!))
       )
 
       // Get the application data
-      const applicationData = changeLogEvent.fields[0].applicationData
+      const applicationData = applicationDataEvent.fields[0].applicationData
 
-      // Remove the first 4 bytes
-      // Otherwise returns "\u000b\u0000\u0000\u0000hello world"
-      const cleanedData = applicationData.slice(4)
+      // Deserialize the application data into NoteSchema
+      note = deserialize(
+        NoteSchemaSchema,
+        NoteSchema,
+        Buffer.from(applicationData)
+      )
 
-      const decoder = new TextDecoder("utf-8")
-      data = decoder.decode(cleanedData)
-
-      if (data !== undefined) {
+      if (note !== undefined) {
         break
       }
     } catch (__) {}
   }
 
-  return data
+  return note
 }
+
+class NoteSchema {
+  leaf_node: Uint8Array
+  message: string
+
+  constructor(properties: { leaf_node: Uint8Array; message: string }) {
+    this.leaf_node = properties.leaf_node
+    this.message = properties.message
+  }
+}
+
+const NoteSchemaSchema = new Map([
+  [
+    NoteSchema,
+    {
+      kind: "struct",
+      fields: [
+        ["leaf_node", [32]], // Array of 32 `u8`
+        ["message", "string"],
+      ],
+    },
+  ],
+])
