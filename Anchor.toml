@@ -8,7 +8,7 @@ anchor_compressed_notes = "TCxHVHUGREfiguKx9SuJsH9Dw6WQpFsRrEfHoXnNopT"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

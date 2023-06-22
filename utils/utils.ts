@@ -2,35 +2,35 @@ import {
   SPL_NOOP_PROGRAM_ID,
   deserializeApplicationDataEvent,
 } from "@solana/spl-account-compression"
-import { Connection, PublicKey } from "@solana/web3.js"
+import { Connection } from "@solana/web3.js"
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes"
 import { deserialize } from "borsh"
 
-class Note {
-  leaf_node: Uint8Array
-  message: string
+class NoteLog {
+  leafNode: Uint8Array
+  note: string
 
-  constructor(properties: { leaf_node: Uint8Array; message: string }) {
-    this.leaf_node = properties.leaf_node
-    this.message = properties.message
+  constructor(properties: { leafNode: Uint8Array; note: string }) {
+    this.leafNode = properties.leafNode
+    this.note = properties.note
   }
 }
 
 // A map that describes the Note structure for Borsh deserialization
-const NoteBorshSchema = new Map([
+const NoteLogBorshSchema = new Map([
   [
-    Note,
+    NoteLog,
     {
       kind: "struct",
       fields: [
-        ["leaf_node", [32]], // Array of 32 `u8`
-        ["message", "string"],
+        ["leafNode", [32]], // Array of 32 `u8`
+        ["note", "string"],
       ],
     },
   ],
 ])
 
-export async function getNote(connection: Connection, txSignature: string) {
+export async function getNoteLog(connection: Connection, txSignature: string) {
   // Confirm the transaction, otherwise the getTransaction sometimes returns null
   const latestBlockHash = await connection.getLatestBlockhash()
   await connection.confirmTransaction({
@@ -56,7 +56,7 @@ export async function getNote(connection: Connection, txSignature: string) {
       ].toBase58() === SPL_NOOP_PROGRAM_ID.toBase58()
   )
 
-  let note: Note
+  let noteLog: NoteLog
   for (let i = noopInnerIx.length - 1; i >= 0; i--) {
     try {
       // Try to decode and deserialize the instruction data
@@ -67,14 +67,18 @@ export async function getNote(connection: Connection, txSignature: string) {
       // Get the application data
       const applicationData = applicationDataEvent.fields[0].applicationData
 
-      // Deserialize the application data into Note instance
-      note = deserialize(NoteBorshSchema, Note, Buffer.from(applicationData))
+      // Deserialize the application data into NoteLog instance
+      noteLog = deserialize(
+        NoteLogBorshSchema,
+        NoteLog,
+        Buffer.from(applicationData)
+      )
 
-      if (note !== undefined) {
+      if (noteLog !== undefined) {
         break
       }
     } catch (__) {}
   }
 
-  return note
+  return noteLog
 }

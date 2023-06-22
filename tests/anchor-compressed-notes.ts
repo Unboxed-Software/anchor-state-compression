@@ -15,7 +15,7 @@ import {
   SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
   SPL_NOOP_PROGRAM_ID,
 } from "@solana/spl-account-compression"
-import { getNote } from "../utils/utils"
+import { getNoteLog } from "../utils/utils"
 import { assert } from "chai"
 import { keccak256 } from "js-sha3"
 
@@ -29,8 +29,11 @@ describe("anchor-compressed-notes", () => {
   const program = anchor.workspace
     .AnchorCompressedNotes as Program<AnchorCompressedNotes>
 
+  // Generate a new keypair for the merkle tree account
   const merkleTree = Keypair.generate()
 
+  // Derive the PDA to use as the tree authority for the merkle tree account
+  // This is a PDA derived from the Note program, which allows the program to sign for appends instructions to the tree
   const [treeAuthority] = PublicKey.findProgramAddressSync(
     [merkleTree.publicKey.toBuffer()],
     program.programId
@@ -38,8 +41,8 @@ describe("anchor-compressed-notes", () => {
 
   it("Create Note Tree", async () => {
     const maxDepthSizePair: ValidDepthSizePair = {
-      maxDepth: 14,
-      maxBufferSize: 64,
+      maxDepth: 3,
+      maxBufferSize: 8,
     }
     const canopyDepth = 0
 
@@ -52,6 +55,7 @@ describe("anchor-compressed-notes", () => {
       canopyDepth
     )
 
+    // instruction to initialize the tree through the Note program
     const ix = await program.methods
       .createNoteTree(maxDepthSizePair.maxDepth, maxDepthSizePair.maxBufferSize)
       .accounts({
@@ -73,10 +77,10 @@ describe("anchor-compressed-notes", () => {
   })
 
   it("Append Leaf", async () => {
-    const message = "hello world"
+    const note = "hello world"
 
     const txSignature = await program.methods
-      .appendNote(message)
+      .appendNote(note)
       .accounts({
         merkleTree: merkleTree.publicKey,
         treeAuthority: treeAuthority,
@@ -85,19 +89,19 @@ describe("anchor-compressed-notes", () => {
       })
       .rpc()
 
-    const note = await getNote(connection, txSignature)
-    const hash = keccak256(message)
-    assert(hash === Buffer.from(note.leaf_node).toString("hex"))
-    assert(message === note.message)
+    const noteLog = await getNoteLog(connection, txSignature)
+    const hash = keccak256(note)
+    assert(hash === Buffer.from(noteLog.leafNode).toString("hex"))
+    assert(note === noteLog.note)
 
     console.log(note)
   })
 
   it("Append Another Leaf", async () => {
-    const message = "another leaf"
+    const note = "another leaf"
 
     const txSignature = await program.methods
-      .appendNote(message)
+      .appendNote(note)
       .accounts({
         merkleTree: merkleTree.publicKey,
         treeAuthority: treeAuthority,
@@ -106,10 +110,10 @@ describe("anchor-compressed-notes", () => {
       })
       .rpc()
 
-    const note = await getNote(connection, txSignature)
-    const hash = keccak256(message)
-    assert(hash === Buffer.from(note.leaf_node).toString("hex"))
-    assert(message === note.message)
+    const noteLog = await getNoteLog(connection, txSignature)
+    const hash = keccak256(note)
+    assert(hash === Buffer.from(noteLog.leafNode).toString("hex"))
+    assert(note === noteLog.note)
 
     console.log(note)
   })
