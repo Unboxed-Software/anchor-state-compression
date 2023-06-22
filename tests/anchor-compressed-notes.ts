@@ -97,8 +97,9 @@ describe("anchor-compressed-notes", () => {
     console.log(note)
   })
 
-  it("Append Another Leaf", async () => {
-    const note = "another leaf"
+  it("Append Another Leaf, Max Note Size", async () => {
+    // Size of note is limited by max transaction size of 1232 bytes, minus additional data required for the instruction
+    const note = "0".repeat(917)
 
     const txSignature = await program.methods
       .appendNote(note)
