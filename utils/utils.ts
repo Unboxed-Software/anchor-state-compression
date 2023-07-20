@@ -2,16 +2,19 @@ import {
   SPL_NOOP_PROGRAM_ID,
   deserializeApplicationDataEvent,
 } from "@solana/spl-account-compression"
-import { Connection } from "@solana/web3.js"
+import { Connection, PublicKey } from "@solana/web3.js"
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes"
 import { deserialize } from "borsh"
+import { keccak256 } from "js-sha3"
 
 class NoteLog {
   leafNode: Uint8Array
+  owner: PublicKey
   note: string
 
-  constructor(properties: { leafNode: Uint8Array; note: string }) {
+  constructor(properties: { leafNode: Uint8Array; owner: Uint8Array; note: string }) {
     this.leafNode = properties.leafNode
+    this.owner = new PublicKey(properties.owner);
     this.note = properties.note
   }
 }
@@ -24,11 +27,20 @@ const NoteLogBorshSchema = new Map([
       kind: "struct",
       fields: [
         ["leafNode", [32]], // Array of 32 `u8`
+        ["owner", [32]], // Pubkey
         ["note", "string"],
       ],
     },
   ],
 ])
+
+export function getHash(note: string, owner: PublicKey) {
+  const noteBuffer = Buffer.from(note);
+  const publicKeyBuffer = Buffer.from(owner.toBytes());
+  const concatenatedBuffer = Buffer.concat([noteBuffer, publicKeyBuffer]);
+  const concatenatedUint8Array = new Uint8Array(concatenatedBuffer.buffer, concatenatedBuffer.byteOffset, concatenatedBuffer.byteLength);
+  return keccak256(concatenatedUint8Array);
+}
 
 export async function getNoteLog(connection: Connection, txSignature: string) {
   // Confirm the transaction, otherwise the getTransaction sometimes returns null
