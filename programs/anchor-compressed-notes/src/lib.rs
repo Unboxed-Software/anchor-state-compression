@@ -1,7 +1,9 @@
 use anchor_lang::{prelude::*, solana_program::keccak};
 use spl_account_compression::{
     cpi::{
-        accounts::{Initialize, Modify},
+        verify_leaf,
+        replace_leaf,
+        accounts::{Initialize, Modify, VerifyLeaf},
         append, init_empty_merkle_tree,
     },
     program::SplAccountCompression,
@@ -11,6 +13,8 @@ declare_id!("TCxHVHUGREfiguKx9SuJsH9Dw6WQpFsRrEfHoXnNopT");
 
 #[program]
 pub mod anchor_compressed_notes {
+    // use spl_account_compression::{VerifyLeaf, cpi::verify_leaf, Modify, cpi::replace_leaf};
+
     use super::*;
 
     // Instruction for creating a new note tree.
@@ -47,9 +51,9 @@ pub mod anchor_compressed_notes {
     // Instruction for appending a note to a tree.
     pub fn append_note(ctx: Context<NoteAccounts>, note: String) -> Result<()> {
         // Hash the "note message" which will be stored as leaf node in the merkle tree
-        let leaf_node = keccak::hashv(&[note.as_bytes()]).to_bytes();
+        let leaf_node = keccak::hashv(&[note.as_bytes(), ctx.accounts.owner.key().as_ref()]).to_bytes();
         // Create a new "note log" using the leaf node hash and note.
-        let note_log = NoteLog::new(leaf_node.clone(), note);
+        let note_log = NoteLog::new(leaf_node.clone(), ctx.accounts.owner.key().clone(), note);
         // Log the "note log" data using noop program
         wrap_application_data_v1(note_log.try_to_vec()?, &ctx.accounts.log_wrapper)?;
 
@@ -76,13 +80,71 @@ pub mod anchor_compressed_notes {
 
         Ok(())
     }
+
+    pub fn update_note(ctx: Context<NoteAccounts>, index: u32, root: [u8; 32], old_note: String, new_note: String) -> Result<()> {
+
+        //1. VerifyLeaf
+        //2. ReplaceLeaf
+        //3. Find index/root client side ->
+
+        if old_note == new_note {
+            msg!("Notes are the same!");
+            return Ok(());
+        }
+
+        let old_leaf = keccak::hashv(&[old_note.as_bytes(), ctx.accounts.owner.key().as_ref()]).to_bytes();
+        let new_leaf = keccak::hashv(&[new_note.as_bytes(), ctx.accounts.owner.key().as_ref()]).to_bytes();
+
+        let merkle_tree = ctx.accounts.merkle_tree.key();
+        // Define the seeds for pda signing
+        let signer_seeds: &[&[&[u8]]] = &[&[
+            merkle_tree.as_ref(), // The address of the merkle tree account as a seed
+            &[*ctx.bumps.get("tree_authority").unwrap()], // The bump seed for the pda
+        ]];
+
+        // Verify Leaf
+        {
+            let cpi_ctx = CpiContext::new_with_signer(
+                ctx.accounts.compression_program.to_account_info(), // The spl account compression program
+                VerifyLeaf {
+                    merkle_tree: ctx.accounts.merkle_tree.to_account_info(), // The merkle tree account to be modified
+                },
+                signer_seeds, // The seeds for pda signing
+            );
+            // Verify or Fails
+            verify_leaf(cpi_ctx, root, old_leaf, index)?;
+        }
+
+
+        // replace leaf
+        {
+            let cpi_ctx = CpiContext::new_with_signer(
+                ctx.accounts.compression_program.to_account_info(), // The spl account compression program
+                Modify {
+                    authority: ctx.accounts.tree_authority.to_account_info(), // The authority for the merkle tree, using a PDA
+                    merkle_tree: ctx.accounts.merkle_tree.to_account_info(), // The merkle tree account to be modified
+                    noop: ctx.accounts.log_wrapper.to_account_info(), // The noop program to log data
+                },
+                signer_seeds, // The seeds for pda signing
+            );
+            // CPI to append the leaf node to the merkle tree
+            replace_leaf(cpi_ctx, root, old_leaf, new_leaf, index)?;
+        }
+
+        // Log out for indexers
+        let note_log = NoteLog::new(new_leaf.clone(), ctx.accounts.owner.key().clone(), new_note);
+        // Log the "note log" data using noop program
+        wrap_application_data_v1(note_log.try_to_vec()?, &ctx.accounts.log_wrapper)?;
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
 pub struct NoteAccounts<'info> {
     // The payer for the transaction
     #[account(mut)]
-    pub payer: Signer<'info>,
+    pub owner: Signer<'info>,
 
     // The pda authority for the merkle tree, only used for signing
     #[account(
@@ -107,12 +169,13 @@ pub struct NoteAccounts<'info> {
 #[derive(AnchorSerialize)]
 pub struct NoteLog {
     leaf_node: [u8; 32], // The leaf node hash
+    owner: Pubkey,        // 
     note: String,        // The note message
 }
 
 impl NoteLog {
     // Constructs a new note from given leaf node and message
-    pub fn new(leaf_node: [u8; 32], note: String) -> Self {
-        Self { leaf_node, note }
+    pub fn new(leaf_node: [u8; 32], owner: Pubkey, note: String) -> Self {
+        Self { leaf_node, owner, note }
     }
 }

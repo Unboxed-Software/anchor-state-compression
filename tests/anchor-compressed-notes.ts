@@ -14,8 +14,11 @@ import {
   createAllocTreeIx,
   SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
   SPL_NOOP_PROGRAM_ID,
+  getAllChangeLogEventV1FromTransaction,
+  ChangeLogEventV1,
+  ConcurrentMerkleTreeAccount,
 } from "@solana/spl-account-compression"
-import { getNoteLog } from "../utils/utils"
+import { getHash, getNoteLog } from "../utils/utils"
 import { assert } from "chai"
 import { keccak256 } from "js-sha3"
 
@@ -31,6 +34,11 @@ describe("anchor-compressed-notes", () => {
 
   // Generate a new keypair for the merkle tree account
   const merkleTree = Keypair.generate()
+  let changeLogEvent: ChangeLogEventV1[];
+
+  const ogNote = "hello world"
+  const ammendedNote = "hello world 2"
+  const note = "0".repeat(917)
 
   // Derive the PDA to use as the tree authority for the merkle tree account
   // This is a PDA derived from the Note program, which allows the program to sign for appends instructions to the tree
@@ -77,7 +85,30 @@ describe("anchor-compressed-notes", () => {
   })
 
   it("Append Leaf", async () => {
-    const note = "hello world"
+
+    const txSignature = await program.methods
+      .appendNote(ogNote)
+      .accounts({
+        merkleTree: merkleTree.publicKey,
+        treeAuthority: treeAuthority,
+        logWrapper: SPL_NOOP_PROGRAM_ID,
+        compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
+      })
+      .rpc()
+
+    const noteLog = await getNoteLog(connection, txSignature)
+        
+    const hash = getHash(ogNote, provider.publicKey)
+    const transactionResponse = await connection.getTransaction(txSignature);
+    changeLogEvent = getAllChangeLogEventV1FromTransaction(transactionResponse);
+    assert(hash === Buffer.from(noteLog.leafNode).toString("hex"))
+    assert(ogNote === noteLog.note)
+
+  })
+
+  it("Append Another Leaf, Max Note Size", async () => {
+    // Size of note is limited by max transaction size of 1232 bytes, minus additional data required for the instruction
+   
 
     const txSignature = await program.methods
       .appendNote(note)
@@ -90,32 +121,40 @@ describe("anchor-compressed-notes", () => {
       .rpc()
 
     const noteLog = await getNoteLog(connection, txSignature)
-    const hash = keccak256(note)
+    const hash = getHash(note, provider.publicKey)
     assert(hash === Buffer.from(noteLog.leafNode).toString("hex"))
     assert(note === noteLog.note)
 
     console.log(note)
   })
 
-  it("Append Another Leaf, Max Note Size", async () => {
-    // Size of note is limited by max transaction size of 1232 bytes, minus additional data required for the instruction
-    const note = "0".repeat(917)
+  it("Change Leaf", async () => {
+
+    const merkleTreeAccount = await ConcurrentMerkleTreeAccount.fromAccountAddress(
+      connection,
+      merkleTree.publicKey,
+    )
+
+    const index = changeLogEvent[0].index;
+    const rootKey = merkleTreeAccount.tree.changeLogs[index].root
+    const root = Array.from(rootKey.toBuffer());
 
     const txSignature = await program.methods
-      .appendNote(note)
-      .accounts({
-        merkleTree: merkleTree.publicKey,
-        treeAuthority: treeAuthority,
-        logWrapper: SPL_NOOP_PROGRAM_ID,
-        compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
-      })
-      .rpc()
+    .updateNote(
+      index,
+      root,
+      ogNote,
+      ammendedNote
+    )
+    .accounts({
+      merkleTree: merkleTree.publicKey,
+      treeAuthority: treeAuthority,
+      logWrapper: SPL_NOOP_PROGRAM_ID,
+      compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
+    })
+    .rpc()
+    const noteLog = await getNoteLog(connection, txSignature);
+    console.log(noteLog);
 
-    const noteLog = await getNoteLog(connection, txSignature)
-    const hash = keccak256(note)
-    assert(hash === Buffer.from(noteLog.leafNode).toString("hex"))
-    assert(note === noteLog.note)
-
-    console.log(note)
   })
 })
